@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Auto Scaling Group with Apache, EBS, and Load Balancer
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH
+    Type: AWS::EC2::KeyPair::KeyName
+
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+
+  AmiId:
+    Description: AMI ID (Amazon Linux 2 preferred)
+    Type: AWS::EC2::Image::Id
+
+  Subnet1:
+    Description: Subnet ID for launching EC2 instances
+    Type: AWS::EC2::Subnet::Id
+  
+  Subnet2:
+    Description: Second subnet in a different Availability Zone (required for ALB)
+    Type: AWS::EC2::Subnet::Id
+
+Resources:
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP and SSH from ALB
+      VpcId: vpc-0dd065dae0bc4f0a2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref LoadBalancerSG
+
+  LoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow internet access to ALB
+      VpcId: vpc-0dd065dae0bc4f0a2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        ImageId: !Ref AmiId
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        UserData: !Base64
+          Fn::Sub: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            mkfs -t ext4 /dev/sdf
+            mkdir /app
+            mount /dev/sdf /app
+            echo "/dev/sdf /app ext4 defaults,nofail 0 2" >> /etc/fstab
+            echo "<h1>Hello from CloudFormation Auto Scaling - Mounted on /app</h1>" > /app/index.html
+            ln -s /app/index.html /var/www/html
+            systemctl enable httpd
+            systemctl start httpd
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 8
+              DeleteOnTermination: true
+              VolumeType: gp2
+          - DeviceName: /dev/sdf
+            Ebs:
+              VolumeSize: 20
+              DeleteOnTermination: true
+              VolumeType: gp2
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: vpc-0dd065dae0bc4f0a2
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+
+  WebServerASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      Tags:
+        - Key: Name
+          Value: AutoScalingWebServer
+          PropagateAtLaunch: true
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: MyWebALB
+      Subnets:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      SecurityGroups:
+        - !Ref LoadBalancerSG
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
