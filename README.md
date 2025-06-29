@@ -70,7 +70,7 @@ aws cloudformation create-stack \
   --stack-name MyEC2Stack \
   --template-body file://ec2_cloudformation_asg.yml \
   --parameters \
-    ParameterKey=KeyName,ParameterValue=ltimeast2 \
+    ParameterKey=KeyName,ParameterValue=yourkey_name \
     ParameterKey=AmiId,ParameterValue=ami-0c803b171269e2d72 \
     ParameterKey=Subnet1,ParameterValue=subnet-0e5e7ebd8ffbdc624\
   --capabilities CAPABILITY_NAMED_IAM \
@@ -80,7 +80,7 @@ aws cloudformation create-stack \
   --stack-name MyEC2Stack \
   --template-body file://ec2_cloudformation_asg_elb.yml \
   --parameters \
-    ParameterKey=KeyName,ParameterValue=ltimeast2 \
+    ParameterKey=KeyName,ParameterValue=yourkey_name \
     ParameterKey=AmiId,ParameterValue=ami-0c803b171269e2d72 \
     ParameterKey=Subnet1,ParameterValue=subnet-0e5e7ebd8ffbdc624 \
     ParameterKey=Subnet2,ParameterValue=subnet-01c5b14b1c2d3bc25 \
@@ -91,7 +91,7 @@ aws cloudformation update-stack \
 --stack-name MyEC2Stack \
 --template-body file://ec2_cloudformation.yml \
 --parameters \
-ParameterKey=KeyName,ParameterValue=ltimeast2 \
+ParameterKey=KeyName,ParameterValue=yourkey_name \
 ParameterKey=AmiId,ParameterValue=ami-0c803b171269e2d72
 
 aws cloudformation delete-stack --stack-name MyEC2Stack
