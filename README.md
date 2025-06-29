@@ -66,6 +66,7 @@ aws cloudformation create-stack \
   --region us-east-2
 ++++++++++++++++++++++++++++++++++++++++++++++++
 AWS Cloudformation template
+Use full commands 
 aws cloudformation create-stack \
   --stack-name MyEC2Stack \
   --template-body file://ec2_cloudformation_asg.yml \
